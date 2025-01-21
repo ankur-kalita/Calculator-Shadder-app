@@ -41,8 +41,7 @@ A web application featuring a Rust-powered calculator and an AI-driven shader ge
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/calculator-shader-app
-cd calculator-shader-app
+[git clone https://github.com/yourusername/calculator-shader-app](https://github.com/ankur-kalita/Calculator-Shadder-app.git)
 ```
 
 2. Install frontend dependencies:
