@@ -96,7 +96,7 @@ export function Calculator({ isDark }) {
           <div className={`text-center text-sm mt-4 transition-colors duration-200 ${
             isDark ? 'text-gray-400' : 'text-gray-600'
           }`}>
-            <p>Try expressions like: 2 + 2 * 3</p>
+            <p>Try expressions like: 2 + 3 * 4</p>
           </div>
         </div>
       </div>
