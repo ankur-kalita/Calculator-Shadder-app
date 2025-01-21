@@ -68,7 +68,7 @@ fn precedence(op: char) -> i32 {
     match op {
         '+' | '-' => 1,
         '*' | '/' => 2,
-        _ => 0,  // You might want to handle an error case here instead
+        _ => 0,  
     }
 }
 

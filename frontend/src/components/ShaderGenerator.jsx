@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { TextField, Button, Paper, Typography, Grid } from '@mui/material';
 
-function ShaderGenerator() {
+export function ShaderGenerator({ isDark }) {
   const [prompt, setPrompt] = useState('');
   const [shaderCode, setShaderCode] = useState('');
   const [error, setError] = useState(null);
@@ -15,74 +14,105 @@ function ShaderGenerator() {
   }, [shaderCode]);
 
   const initWebGL = (shaderSource) => {
-    const canvas = canvasRef.current;
-    const gl = canvas.getContext('webgl');
+  const canvas = canvasRef.current;
+  if (!canvas) return;
 
-    if (!gl) {
-      setError('WebGL not supported');
-      return;
+  const gl = canvas.getContext("webgl");
+  if (!gl) {
+    setError("WebGL not supported");
+    return;
+  }
+
+  try {
+    // Clear any existing error
+    setError(null);
+
+    // Vertex Shader Source
+    const vertexShaderSource = `
+      attribute vec4 a_position;
+      void main() {
+        gl_Position = a_position;
+      }
+    `;
+
+    // Fragment Shader Source (from OpenAI)
+    const fragmentShaderSource = shaderSource;
+
+    // Compile shaders
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+    // Link program
+    const program = createProgram(gl, vertexShader, fragmentShader);
+    gl.useProgram(program);
+
+    // Set up position buffer
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    const positions = [
+      -1, -1,
+       1, -1,
+      -1,  1,
+      -1,  1,
+       1, -1,
+       1,  1,
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+    // Look up location of a_position
+    const positionLocation = gl.getAttribLocation(program, "a_position");
+    gl.enableVertexAttribArray(positionLocation);
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+    // Pass uniform data
+    const resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
+    const mouseUniformLocation = gl.getUniformLocation(program, "u_mouse");
+
+    // Set the resolution uniform
+    gl.uniform2f(resolutionUniformLocation, canvas.width, canvas.height);
+
+    // Dummy mouse uniform for now
+    gl.uniform2f(mouseUniformLocation, 0.5, 0.5);
+
+    // Draw
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  } catch (err) {
+    setError(err instanceof Error ? err.message : "An error occurred");
+  }
+};
+
+
+  const createShader = (gl, type, source) => {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+    if (success) {
+      return shader;
     }
 
-    try {
-      // Create shaders (simplified version - you'll need to expand this)
-      const vertexShader = gl.createShader(gl.VERTEX_SHADER);
-      const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+    const info = gl.getShaderInfoLog(shader);
+    gl.deleteShader(shader);
+    throw new Error(`Could not compile shader:\n${info}`);
+  };
 
-      // Basic vertex shader
-      const vertexShaderSource = `
-        attribute vec4 aPosition;
-        void main() {
-          gl_Position = aPosition;
-        }
-      `;
-
-      gl.shaderSource(vertexShader, vertexShaderSource);
-      gl.shaderSource(fragmentShader, shaderSource);
-
-      gl.compileShader(vertexShader);
-      gl.compileShader(fragmentShader);
-
-      // Check for compilation errors
-      if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
-        throw new Error(gl.getShaderInfoLog(fragmentShader));
-      }
-
-      // Create and link program
-      const program = gl.createProgram();
-      gl.attachShader(program, vertexShader);
-      gl.attachShader(program, fragmentShader);
-      gl.linkProgram(program);
-
-      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        throw new Error('Unable to initialize shader program');
-      }
-
-      // Use program and set up attributes/uniforms
-      gl.useProgram(program);
-
-      // Create a buffer for the vertices
-      const vertices = new Float32Array([
-        -1.0, -1.0,
-         1.0, -1.0,
-        -1.0,  1.0,
-         1.0,  1.0
-      ]);
-
-      const vertexBuffer = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-
-      const aPosition = gl.getAttribLocation(program, 'aPosition');
-      gl.enableVertexAttribArray(aPosition);
-      gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
-
-      // Draw
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      
-      setError(null);
-    } catch (err) {
-      setError(err.message);
+  const createProgram = (gl, vertexShader, fragmentShader) => {
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    const success = gl.getProgramParameter(program, gl.LINK_STATUS);
+    if (success) {
+      return program;
     }
+
+    const info = gl.getProgramInfoLog(program);
+    gl.deleteProgram(program);
+    throw new Error(`Could not link program:\n${info}`);
   };
 
   const handleGenerateShader = async () => {
@@ -90,7 +120,7 @@ function ShaderGenerator() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:4000/api/generate-shader', {
+      const response = await fetch('http://localhost:4000/api/generate-shader', {  // Use relative URL
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -98,11 +128,18 @@ function ShaderGenerator() {
         body: JSON.stringify({ prompt }),
       });
 
+      const contentLength = response.headers.get('content-length');
+      if (contentLength === '0') {
+        throw new Error('Received empty response from the server.');
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to generate shader');
       }
+
+      console.log(data);
 
       setShaderCode(data.shader);
     } catch (err) {
@@ -113,76 +150,68 @@ function ShaderGenerator() {
   };
 
   return (
-    <Paper elevation={3} style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-      <Grid container spacing={3} direction="column" alignItems="center">
-        <Grid item xs={12}>
-          <Typography variant="h5" component="h2">
-            Shader Generator
-          </Typography>
-        </Grid>
+    <div className="p-6 space-y-6">
+      <h2 className={`text-2xl font-semibold text-center transition-colors duration-200 ${
+        isDark ? 'text-white' : 'text-gray-800'
+      }`}>
+        Shader Generator
+      </h2>
 
-        <Grid item xs={12} style={{ width: '100%' }}>
-          <TextField
-            label="Describe the shader you want"
-            variant="outlined"
+      <div className="space-y-4">
+        <div>
+          <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            fullWidth
-            multiline
+            placeholder="Describe the shader you want (e.g., A rotating cube with a gradient background)"
             rows={3}
-            placeholder="Example: A rotating cube with a gradient background"
+            className={`w-full px-4 py-2 rounded-md focus:ring-2 focus:ring-blue-400 outline-none transition-all resize-none ${
+              isDark
+                ? 'bg-gray-900 border-gray-700 text-white placeholder-gray-500'
+                : 'bg-white border-gray-200 text-gray-800 placeholder-gray-400'
+            }`}
           />
-        </Grid>
+        </div>
 
-        <Grid item>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleGenerateShader}
-            disabled={isLoading || !prompt}
-          >
-            {isLoading ? 'Generating...' : 'Generate Shader'}
-          </Button>
-        </Grid>
+        <button
+          onClick={handleGenerateShader}
+          disabled={isLoading || !prompt}
+          className="w-full sm:w-auto px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-md hover:from-blue-600 hover:to-indigo-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+        >
+          {isLoading ? 'Generating...' : 'Generate Shader'}
+        </button>
 
         {error && (
-          <Grid item>
-            <Typography color="error">
-              {error}
-            </Typography>
-          </Grid>
+          <div className="text-red-500 text-sm">
+            {error}
+          </div>
         )}
 
-        <Grid item xs={12}>
-          <canvas
-            ref={canvasRef}
-            width={400}
-            height={400}
-            style={{
-              border: '1px solid #ccc',
-              display: 'block',
-              margin: '2rem auto',
-            }}
-          />
-        </Grid>
+        <canvas
+          ref={canvasRef}
+          width={400}
+          height={400}
+          className={`mx-auto border rounded-lg transition-colors duration-200 ${
+            isDark ? 'border-gray-700' : 'border-gray-200'
+          }`}
+        />
 
         {shaderCode && (
-          <Grid item xs={12}>
-            <Typography variant="h6">Generated Shader Code:</Typography>
-            <pre style={{
-              backgroundColor: '#f5f5f5',
-              padding: '1rem',
-              borderRadius: '4px',
-              overflow: 'auto',
-              maxHeight: '300px'
-            }}>
+          <div>
+            <h3 className={`text-lg font-medium mb-2 transition-colors duration-200 ${
+              isDark ? 'text-white' : 'text-gray-800'
+            }`}>
+              Generated Shader Code:
+            </h3>
+            <pre className={`p-4 rounded-lg overflow-auto max-h-[300px] text-sm transition-colors duration-200 ${
+              isDark
+                ? 'bg-gray-900 text-gray-300 border border-gray-700'
+                : 'bg-gray-50 text-gray-800'
+            }`}>
               {shaderCode}
             </pre>
-          </Grid>
+          </div>
         )}
-      </Grid>
-    </Paper>
+      </div>
+    </div>
   );
 }
-
-export default ShaderGenerator;
