@@ -86,3 +86,5 @@ config :phoenix_live_view,
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+config :backend, openai_api_key: "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"
