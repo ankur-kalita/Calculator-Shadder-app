@@ -120,7 +120,7 @@ export function ShaderGenerator({ isDark }) {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:4000/api/generate-shader', {  // Use relative URL
+      const response = await fetch('https://elixi.gigalixirapp.com/api/generate-shader', {  
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
